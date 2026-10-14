@@ -1,0 +1,625 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Monthly Report</title>
+<style>
+  :root{
+    --bg:#f3f4f6; --card:#fff; --ink:#1b2430; --muted:#5f6b7a; --line:#e6e9ee;
+    --primary:#0a66d8; --up:#1a7f37; --down:#c0152b;
+    --prevbar:#c6ebd0; --curbar:#1f9d55;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:"Segoe UI","72",system-ui,-apple-system,Arial,sans-serif;font-size:14px}
+  header{background:#fff;border-bottom:1px solid var(--line);padding:14px 20px;display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap}
+  .crumb{font-size:12px;color:var(--muted)}
+  h1{margin:2px 0 0;font-size:22px;font-weight:600}
+  .filters{display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap}
+  .filters label{display:flex;flex-direction:column;font-size:11px;color:var(--muted);gap:3px}
+  select{height:32px;border:1px solid #c5ccd6;border-radius:6px;padding:0 8px;background:#fff;font-size:13px;min-width:110px}
+  #company{min-width:210px}
+  button{height:32px;padding:0 20px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;border:1px solid var(--primary)}
+  .btn-go{background:var(--primary);color:#fff}
+  main{padding:16px 20px;display:grid;gap:16px;max-width:1500px;margin:0 auto}
+
+  .kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+  .cols{display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start}
+  .stack{display:grid;gap:16px;min-width:0}
+  @media(max-width:900px){.kpis,.cols{grid-template-columns:1fr}}
+
+  .card{background:var(--card);border-radius:12px;padding:16px 18px;box-shadow:0 1px 3px rgba(16,24,40,.08);min-width:0;position:relative}
+  .click{cursor:pointer;transition:box-shadow .15s}
+  .click:hover{box-shadow:0 4px 14px rgba(16,24,40,.16)}
+  .click::after{content:'›';position:absolute;top:10px;right:16px;font-size:24px;line-height:1;color:#9aa4b2}
+  .kpi .lbl{font-size:13.5px;color:var(--muted)}
+  .kpi .val{font-size:34px;font-weight:600;margin:8px 0 6px;letter-spacing:-.5px;text-align:right}
+  .kpi .val small{font-size:13px;font-weight:400;color:var(--muted);margin-left:6px;letter-spacing:0}
+  .kpi .sub{font-size:17.5px;font-weight:500;text-align:right}
+  .up{color:var(--up)} .down{color:var(--down)} .neutral{color:var(--muted)}
+  .card h2{margin:0;font-size:16px;font-weight:600}
+  .card .meta{font-size:11.5px;color:var(--muted);margin:2px 0 10px}
+
+  table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+  th{font-size:11.5px;color:var(--muted);font-weight:600;text-align:right;padding:6px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
+  td{padding:8px;text-align:right;border-bottom:1px solid #f0f2f5;white-space:nowrap}
+  th:first-child,td:first-child{text-align:left;padding-left:0}
+  th:last-child,td:last-child{padding-right:0}
+  th.grp{text-align:center;border-left:1px solid var(--line)}
+  tr.total td{font-weight:700;border-bottom:none;border-top:1px solid var(--line)}
+  tr.memo td{color:var(--muted);font-style:italic}
+  tr.grprow td{background:#f6f8fa;font-weight:700;color:var(--muted);text-align:left;padding-left:8px;border-bottom:1px solid var(--line)}
+  .ytdc{border-left:1px solid var(--line);font-weight:600}
+  .scroll{overflow-x:auto}
+  table.mini{margin-top:8px;font-size:13.5px}
+  table.mini td:first-child{font-weight:600}
+  table.dense{font-size:13px}
+  table.mini th,table.mini td,table.dense th,table.dense td{padding:8px 6px}
+  table.mini th:first-child,table.mini td:first-child,table.dense th:first-child,table.dense td:first-child{padding-left:0}
+  table.mini th:last-child,table.mini td:last-child,table.dense th:last-child,table.dense td:last-child{padding-right:0}
+  .link{margin:14px 0 0}
+  a{color:var(--primary)}
+  .legend{display:flex;gap:16px;justify-content:center;font-size:12px;color:var(--muted);margin-top:4px}
+  .legend i{display:inline-block;width:11px;height:11px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+  #banner{display:none;background:#fff4e5;color:#7a4a00;border:1px solid #f5d29b;padding:10px 14px;border-radius:8px}
+  .note{font-size:12.5px;color:var(--muted);margin:12px 0 0}
+  svg text{font-family:inherit}
+
+  #modal{display:none;position:fixed;inset:0;background:rgba(15,23,42,.45);z-index:50;justify-content:center;align-items:flex-start;padding:40px 16px;overflow:auto}
+  #modal.open{display:flex}
+  .sheet{background:#fff;border-radius:14px;max-width:1280px;width:100%;padding:20px 24px 24px;box-shadow:0 20px 50px rgba(0,0,0,.25)}
+  .sheet-head{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px}
+  .sheet-head h2{margin:0;font-size:18px;font-weight:600}
+  .sheet-head .meta{margin:3px 0 0;font-size:12.5px;color:var(--muted)}
+  .x{border:0;background:none;font-size:28px;line-height:1;color:var(--muted);height:auto;padding:0 4px}
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <div class="crumb" id="crumb">Finance › MIS</div>
+    <h1 id="title">Monthly Report</h1>
+  </div>
+  <div class="filters">
+    <label>Company code<select id="company"></select></label>
+    <label>Fiscal year<select id="fy"></select></label>
+    <label>Period<select id="period"></select></label>
+    <label>Unit
+      <select id="unit">
+        <option value="lacs">Value in Lacs</option>
+        <option value="cr">Value in Crores</option>
+        <option value="abs">Absolute</option>
+      </select>
+    </label>
+    <button class="btn-go" id="go">Go</button>
+  </div>
+</header>
+
+<main>
+  <div id="banner"></div>
+  <section class="kpis" id="kpis"></section>
+
+  <section class="cols">
+    <div class="stack">
+      <div class="card">
+        <h2>Monthly Sales Value</h2>
+        <div class="meta" id="chartMeta"></div>
+        <div id="chart"></div>
+        <div class="legend">
+          <span><i style="background:var(--prevbar)"></i><span id="lgPrev"></span></span>
+          <span><i style="background:var(--curbar)"></i><span id="lgCur"></span></span>
+        </div>
+      </div>
+      <div id="debTile"></div>
+      <div id="creTile"></div>
+    </div>
+    <div class="stack">
+      <div class="card click" data-act="brandMatrix" title="Click for month-wise breakup">
+        <h2>Brand-wise Sales · YTD</h2>
+        <div class="meta" id="brandMeta"></div>
+        <div class="scroll"><table class="dense" id="brandTbl"></table></div>
+      </div>
+      <div class="card click" data-act="expMonthly" title="Click for month-wise breakup">
+        <h2>Purchase &amp; Expenses · YTD</h2>
+        <div class="meta" id="expMeta"></div>
+        <table id="expTbl"></table>
+      </div>
+    </div>
+  </section>
+</main>
+
+<div id="modal">
+  <div class="sheet">
+    <div class="sheet-head">
+      <div><h2 id="mTitle"></h2><div class="meta" id="mSub"></div></div>
+      <button class="x" id="mClose" aria-label="Close">×</button>
+    </div>
+    <div class="scroll" id="mBody"></div>
+  </div>
+</div>
+
+<script>
+/* =====================================================================
+   1. CONFIG – flip USE_MOCK to false once the OData service is ready
+   ===================================================================== */
+const CONFIG = {
+  USE_MOCK: true,
+  ODATA_VERSION: 'v2',                          // 'v2' -> d.results | 'v4' -> value
+  BASE_URL: '/sap/opu/odata/sap/ZMIS_REPORT_SRV',
+  ENTITIES: {                                   // entity set names (placeholders)
+    sales:'SalesMonthSet', brands:'BrandSalesSet', returns:'SalesReturnSet',
+    expenses:'PurchaseExpenseSet', debtors:'DebtorsAgeingSet', creditors:'CreditorsAgeingSet'
+  },
+  // Property names returned by your entities. Change here, nowhere else.
+  // period = fiscal period number (1 = Apr … 12 = Mar); bucket = B1…B5 (0-30 … Above 90)
+  FIELDS: {
+    sales:     { co:'CompanyCode', fy:'FiscalYear', period:'Period', qty:'Qty', value:'Value' },
+    brands:    { co:'CompanyCode', fy:'FiscalYear', period:'Period', brand:'Brand', qty:'Qty', value:'Value' },
+    returns:   { co:'CompanyCode', fy:'FiscalYear', period:'Period', value:'Value' },
+    expenses:  { co:'CompanyCode', fy:'FiscalYear', period:'Period', label:'Category', value:'Amount' },
+    debtors:   { co:'CompanyCode', fy:'FiscalYear', party:'Party', bucket:'Bucket', value:'Amount' },
+    creditors: { co:'CompanyCode', fy:'FiscalYear', type:'Type', bucket:'Bucket', value:'Amount' }  // Type: 'CR' | 'ADV'
+  },
+  VALUE_DIVISOR: 100000                         // OData sends rupees; 1 Lac = 100000
+};
+
+const COMPANIES = [
+  { code:'1000', name:'Perfect Engineers' },
+  { code:'2000', name:'Aqua Flow' }
+];
+const DEFAULT_COMPANY = '1000';
+const FY_LIST = ['2026-2027','2025-2026'];
+const MONTHS  = ['Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec','Jan','Feb','Mar'];   // fiscal order
+const FULL    = ['April','May','June','July','August','September','October','November','December','January','February','March'];
+const BUCKETS = ['0–30','31–45','46–60','61–90','Above 90'];
+
+const pad = a => [...a, ...Array(12 - a.length).fill(null)];
+const sumArr = (a, from = 0, to = a.length - 1) => {
+  let s = 0, any = false;
+  for(let i = from; i <= to; i++) if(a[i] != null){ s += a[i]; any = true; }
+  return any ? s : null;
+};
+
+/* =====================================================================
+   2. MOCK DATA  – company 1000 is the exact Sep-2026 PE report (Lacs).
+      Company 2000 is generated sample data (no PDF supplied yet).
+      Both use the SAME model the OData adapter returns.
+   ===================================================================== */
+function pe1000(){
+  return {
+    sales:{
+      cq:pad([126322,103837,103405,103352,62249,64188]),
+      cv:pad([3306.28,3199.08,3227.28,3186.77,2667.36,2108.00]),
+      pq:[118348,110270,66460,71467,84298,73272,67833,94697,76635,50583,115871,93504],
+      pv:[2893.65,2968.82,2316.16,2611.35,2392.63,1891.46,1740.70,2366.95,2313.45,1573.73,2926.70,2470.24]
+    },
+    brands:[
+      {n:'Crompton', q:pad([121704,102144,102363,101039,58705,61973]), v:pad([2883.25,2908.88,2838.49,2828.29,2265.82,1785.66]), tq:547928, tv:15510.38},
+      {n:'Dharani',  q:pad([346,205,426,1370,2305,1242]),             v:pad([19.88,16.14,23.38,52.96,72.39,45.94]),          tq:5894,   tv:230.68},
+      {n:'Grundfos', q:pad([736,785,516,460,540,712]),               v:pad([72.39,85.44,49.51,52.03,55.73,84.51]),          tq:3749,   tv:399.61},
+      {n:'Paranaa',  q:pad([1,5,2,null,1,null]),                     v:pad([0.44,2.69,0.93,null,0.47,null]),                tq:9,      tv:4.53},
+      {n:'Kirloskar',q:pad([385,null,98,483,694,247]),               v:pad([29.06,null,15.17,54.70,76.68,37.24]),           tq:1907,   tv:212.85},
+      {n:'SFL',      q:pad([null,null,null,null,4,14]),              v:pad([null,null,null,null,0.41,1.68]),                tq:18,     tv:2.09},
+      {n:'Guwahati WH Sales', q:pad([1441,620]),                     v:pad([27.89,38.39]),                                  tq:2061,   tv:66.28},
+      {n:'Kolkata WH Sales',  q:pad([1709,78]),                      v:pad([30.36,2.10]),                                   tq:1787,   tv:32.46},
+      {n:'Spares / Services', q:pad([]),                             v:pad([243.00,145.44,299.81,198.79,195.86,152.97]),    tq:null,   tv:1235.87}
+    ],
+    returns:pad([34.20,61.32,46.50,48.93,15.30,39.39]),          // "CGCEL Return" memo row
+    purchase:{
+      rows:[
+        {n:'Direct Purchase',           v:pad([2519.84,2385.28,2914.87,2756.83,2061.65,1721.58]), t:14360.06},
+        {n:'Labour Charges',            v:pad([124.69,134.04,157.03,148.76,127.97,112.53]),       t:805.02},
+        {n:'Direct / Indirect Expenses',v:pad([367.81,402.62,404.11,583.09,399.87,438.79]),       t:2596.28},
+        {n:'Capital / Building WIP',    v:pad([102.02,11.17,17.05,43.04,11.60,26.00]),            t:210.87}
+      ],
+      total:{ v:pad([3114.35,2933.11,3493.06,3531.72,2601.09,2298.90]), t:17972.23 }
+    },
+    expNote:{ idx:5, row:'Direct / Indirect Expenses', items:[['Depreciation',43.95],['Interest',34.25]] },
+    debtors:{
+      rows:[
+        {n:'Crompton',     b:[1189.68,null,null,null,null], t:1189.68},
+        {n:'Dharani - HO', b:[23.69,12.14,16.74,14.62,58.47], t:125.65},
+        {n:'Dharani - Warehouse', b:[0,0,0,0,66.41], t:66.41},
+        {n:'Grundfos',     b:[99.72,50.82,null,null,null], t:150.54},
+        {n:'Ebara',        b:[null,null,null,null,0.53], t:0.53},
+        {n:'Kirloskar',    b:[43.95,57.48,31.00,0,null], t:132.43},
+        {n:'SFL',          b:[3.16,0.49,null,null,null], t:3.65},
+        {n:'Aqua Flow',    b:[61.98,28.93,23.80,null,null], t:114.72},
+        {n:'Asia Engg',    b:[12.63,13.19,4.84,25.32,15.22], t:71.20}
+      ],
+      total:{ b:[1434.82,163.04,76.39,39.94,140.63], t:1854.81 }
+    },
+    creditors:{
+      cr: { b:[2033.69,859.57,659.38,1283.61,86.90], t:4923.15 },
+      adv:{ b:[88.97,9.02,12.03,7.87,82.55],         t:200.44 }
+    }
+  };
+}
+
+function aqua2000(){
+  const r2 = x => Math.round(x*100)/100;
+  const gq = [18200,16950,17400,17120,14300,15880], gv = [412.50,389.75,401.20,396.40,331.85,365.10];
+  const pq = gq.map(x=>Math.round(x*.55)), pv = gv.map(x=>r2(x*.50));
+  const kq = gq.map(x=>Math.round(x*.30)), kv = gv.map(x=>r2(x*.28));
+  const vq = gq.map((x,i)=>x-pq[i]-kq[i]), vv = gv.map(x=>r2(x*.14));
+  const sv = gv.map((x,i)=>r2(x-pv[i]-kv[i]-vv[i]));
+  const share = (p) => pad(gv.map(x=>r2(x*p)));
+  return {
+    sales:{
+      cq:pad(gq), cv:pad(gv),
+      pq:[16800,16100,15200,15900,13200,14100,13500,15800,14900,12400,16700,15300],
+      pv:[376.40,361.80,350.20,358.90,301.50,322.70,310.10,365.40,341.80,288.60,380.20,352.70]
+    },
+    brands:[
+      {n:'Aquaflow Pumps',    q:pad(pq), v:pad(pv)},
+      {n:'Aquaflow Pipes',    q:pad(kq), v:pad(kv)},
+      {n:'Valves & Fittings', q:pad(vq), v:pad(vv)},
+      {n:'Spares / Services', q:pad([]), v:pad(sv)}
+    ],
+    returns:null,
+    purchase:{ rows:[
+      {n:'Direct Purchase',            v:share(.72)},
+      {n:'Labour Charges',             v:share(.05)},
+      {n:'Direct / Indirect Expenses', v:share(.12)},
+      {n:'Capital / Building WIP',     v:share(.02)}
+    ]},
+    expNote:null,
+    debtors:{ rows:[
+      {n:'Dealer – North', b:[112.40,38.20,14.60,6.10,3.40]},
+      {n:'Dealer – South', b:[96.80,31.50,12.20,4.80,2.10]},
+      {n:'Dealer – East',  b:[64.30,22.70,9.50,5.20,6.80]},
+      {n:'Govt Projects',  b:[41.20,18.90,11.30,9.60,12.50]}
+    ]},
+    creditors:{ cr:{b:[210.50,98.30,64.10,41.70,12.90]}, adv:{b:[9.40,2.10,1.60,null,4.80]} }
+  };
+}
+
+/* Fills derived totals so mock and OData go through the same path */
+function finish(d, name){
+  const sb = b => b.reduce((s,x)=>s+(x||0),0);
+  const col = rows => [0,1,2,3,4].map(i=>rows.reduce((s,r)=>s+(r.b[i]||0),0));
+  const fix = t => {
+    if(!t) return;
+    t.rows.forEach(r=>{ if(r.t==null) r.t = sb(r.b); });
+    if(!t.total) t.total = { b:col(t.rows) };
+    if(t.total.t == null) t.total.t = sb(t.total.b);
+  };
+  fix(d.debtors);
+  ['cr','adv'].forEach(k=>{ const c=d.creditors[k]; if(c.t==null) c.t = sb(c.b); });
+  if(!d.purchase.total) d.purchase.total = {};
+  if(!d.purchase.total.v) d.purchase.total.v = MONTHS.map((_,i)=>sumArr(d.purchase.rows.map(r=>r.v[i]),0,0));
+  d.name = name;
+  d.lastIdx = d.sales.cv.reduce((l,v,i)=>v!=null?i:l,-1);
+  return d;
+}
+
+function mockData(co, fy){
+  if(fy !== '2026-2027') return null;                  // mock only covers FY 2026-27
+  const c = COMPANIES.find(x=>x.code===co);
+  return finish(co==='1000' ? pe1000() : aqua2000(), c.name);
+}
+
+/* =====================================================================
+   3. ODATA ADAPTER – returns the SAME model as the mock builders
+   ===================================================================== */
+async function odataGet(entity, filter){
+  const q = new URLSearchParams({ $format:'json' });
+  if(filter) q.set('$filter', filter);
+  const res = await fetch(`${CONFIG.BASE_URL}/${CONFIG.ENTITIES[entity]}?${q}`, {headers:{Accept:'application/json'}});
+  if(!res.ok) throw new Error(`${entity}: HTTP ${res.status}`);
+  const j = await res.json();
+  return CONFIG.ODATA_VERSION === 'v2' ? (j.d?.results ?? []) : (j.value ?? []);
+}
+
+async function odataData(co, fy){
+  const F = CONFIG.FIELDS, D = CONFIG.VALUE_DIVISOR, E = CONFIG.ENTITIES;
+  const prevFy = `${+fy.slice(0,4)-1}-${+fy.slice(5)-1}`;
+  const one = f => `${f.co} eq '${co}' and ${f.fy} eq '${fy}'`;
+  const two = f => `${f.co} eq '${co}' and (${f.fy} eq '${fy}' or ${f.fy} eq '${prevFy}')`;
+
+  const [sR,bR,rR,eR,dR,cR] = await Promise.all([
+    odataGet('sales', two(F.sales)), odataGet('brands', one(F.brands)),
+    E.returns ? odataGet('returns', one(F.returns)) : [],
+    odataGet('expenses', one(F.expenses)), odataGet('debtors', one(F.debtors)),
+    odataGet('creditors', one(F.creditors))
+  ]);
+
+  const nulls = n => Array(n).fill(null);
+  const salesArr = fyv => {
+    const q = nulls(12), v = nulls(12);
+    sR.filter(r=>r[F.sales.fy]===fyv).forEach(r=>{ const i=+r[F.sales.period]-1; q[i]=+r[F.sales.qty]; v[i]=+r[F.sales.value]/D; });
+    return [q,v];
+  };
+  const [cq,cv] = salesArr(fy), [pq,pv] = salesArr(prevFy);
+
+  const monthly = (rows, f, keyOf, withQty) => {          // group by key -> 12-month arrays
+    const m = new Map();
+    rows.forEach(r=>{
+      const k = keyOf(r); if(!m.has(k)) m.set(k,{n:k,q:nulls(12),v:nulls(12)});
+      const o = m.get(k), i = +r[f.period]-1;
+      if(withQty) o.q[i] = (o.q[i]||0) + (+r[f.qty]||0);
+      o.v[i] = (o.v[i]||0) + (+r[f.value])/D;
+    });
+    return [...m.values()];
+  };
+  const bucketed = (rows, f, keyOf) => {                   // group by key -> 5 bucket values
+    const m = new Map();
+    rows.forEach(r=>{
+      const k = keyOf(r); if(!m.has(k)) m.set(k,{n:k,b:nulls(5)});
+      const i = +String(r[f.bucket]).replace(/\D/g,'')-1;
+      m.get(k).b[i] = (m.get(k).b[i]||0) + (+r[f.value])/D;
+    });
+    return [...m.values()];
+  };
+
+  const brands = monthly(bR, F.brands, r=>r[F.brands.brand], true);
+  const exp    = monthly(eR, F.expenses, r=>r[F.expenses.label], false).map(x=>({n:x.n, v:x.v}));
+  const ret    = rR.length ? monthly(rR, F.returns, ()=>'ret', false)[0].v : null;
+  const crRows = bucketed(cR, F.creditors, r=>r[F.creditors.type]);
+  const pick = k => crRows.find(x=>x.n===k) || {b:nulls(5)};
+
+  return {
+    sales:{ cq, cv, pq, pv },
+    brands, returns:ret,
+    purchase:{ rows:exp },
+    expNote:null,
+    debtors:{ rows:bucketed(dR, F.debtors, r=>r[F.debtors.party]) },
+    creditors:{ cr:{b:pick('CR').b}, adv:{b:pick('ADV').b} }
+  };
+}
+
+async function loadData(co, fy){
+  if(CONFIG.USE_MOCK) return mockData(co, fy);
+  const c = COMPANIES.find(x=>x.code===co);
+  return finish(await odataData(co, fy), c.name);
+}
+
+/* =====================================================================
+   4. HELPERS
+   ===================================================================== */
+const $ = id => document.getElementById(id);
+const unitInfo = () => ({
+  lacs:{f:1,   label:'Lacs', name:'Lacs',    dp:2},
+  cr:  {f:.01, label:'Cr',   name:'Crores',  dp:2},
+  abs: {f:1e5, label:'',     name:'Rupees',  dp:0}
+}[$('unit').value]);
+const nfIN  = (n,dp=2)=> n==null ? '–' : n.toLocaleString('en-IN',{minimumFractionDigits:dp,maximumFractionDigits:dp});
+const money = n => n==null ? '–' : '₹\u00a0' + nfIN(n*unitInfo().f, unitInfo().dp);
+const calYear = (fy,i) => i<9 ? +fy.slice(0,4) : +fy.slice(5);
+const mLabel  = (fy,i) => `${MONTHS[i]}-${String(calYear(fy,i)).slice(2)}`;
+const range   = i => i===0 ? 'Apr' : `Apr–${MONTHS[i]}`;
+const pct = (c,p)=> (c==null||!p) ? null : ((c-p)/p*100);
+const chg = (c,p)=>{ const x=pct(c,p); return x==null ? '–' : `<span class="${x>=0?'up':'down'}">${x>=0?'▲':'▼'} ${Math.abs(x).toFixed(1)}%</span>`; };
+
+function delta(cur, prev, prevLabel, fmt){
+  const p = pct(cur,prev);
+  if(p==null) return `<div class="sub neutral">No comparison data</div>`;
+  return `<div class="sub ${p>=0?'up':'down'}">${p>=0?'▲':'▼'} ${Math.abs(p).toFixed(1)}% vs ${prevLabel} (${fmt(prev)})</div>`;
+}
+
+/* aggregated brand totals: PDF totals win when the full available range is selected */
+function brandTot(b, d, pi){
+  const full = pi >= d.lastIdx;
+  return { q: full && b.tq!=null ? b.tq : sumArr(b.q,0,pi),
+           v: full && b.tv!=null ? b.tv : sumArr(b.v,0,pi) };
+}
+const rowTot = (r, d, pi) => (pi >= d.lastIdx && r.t!=null) ? r.t : sumArr(r.v,0,pi);
+
+/* =====================================================================
+   5. MAIN-PAGE RENDERERS
+   ===================================================================== */
+let STATE = null;
+
+function ageTable(rows, total, firstHead, extra=''){
+  const cell = (x,i,bold) => `<td class="${i===4&&x?'down':''}">${x==null?'–':money(x)}</td>`;
+  return `<tr><th>${firstHead}</th>${BUCKETS.map(b=>`<th>${b}</th>`).join('')}<th>Total</th></tr>` +
+    rows.map(r=>`<tr><td>${r.n}</td>${r.b.map(cell).join('')}<td><b>${money(r.t)}</b></td></tr>`).join('') +
+    `<tr class="total"><td>Total</td>${total.b.map(cell).join('')}<td>${money(total.t)}</td></tr>`;
+}
+
+function ageTile(title, rows, act){
+  return `<div class="card kpi${act?' click':''}"${act?` data-act="${act}"`:''}><div class="lbl">${title}</div>
+    <div class="scroll"><table class="mini">
+      <tr><th></th>${BUCKETS.map(b=>`<th>${b}</th>`).join('')}<th>Total</th></tr>
+      ${rows.map(r=>`<tr><td>${r.label}</td>${r.b.map((x,i)=>`<td class="${i===4&&x?'down':''}">${x==null?'–':money(x)}</td>`).join('')}<td><b>${money(r.t)}</b></td></tr>`).join('')}
+    </table></div></div>`;
+}
+
+function render(d, co, fy, pi){
+  STATE = {d, co, fy, pi};
+  const u = unitInfo(), cyr = calYear(fy,pi), S = d.sales;
+  const cv=S.cv[pi], pv=S.pv[pi], cq=S.cq[pi], pq=S.pq[pi];
+  const ytdC = sumArr(S.cv,0,pi), ytdP = sumArr(S.pv,0,pi);
+  const lbl = mLabel(fy,pi), lblPrev = `${MONTHS[pi]}-${String(cyr-1).slice(2)}`;
+
+  $('crumb').textContent = `Finance › MIS › ${co} - ${d.name}`;
+  $('title').textContent = `Monthly Report · ${FULL[pi]} ${cyr}`;
+
+  $('kpis').innerHTML = `
+    <div class="card kpi click" data-act="salesValue"><div class="lbl">Sales Value · ${lbl}</div>
+      <div class="val">${money(cv)}<small>${u.label}</small></div>
+      ${delta(cv, pv, lblPrev, money)}</div>
+    <div class="card kpi click" data-act="salesQty"><div class="lbl">Sales Qty · ${lbl}</div>
+      <div class="val">${nfIN(cq,0)}</div>
+      ${delta(cq, pq, lblPrev, v=>nfIN(v,0))}</div>
+    <div class="card kpi click" data-act="ytd"><div class="lbl">YTD Sales Value · ${range(pi)}</div>
+      <div class="val">${money(ytdC)}<small>${u.label}</small></div>
+      ${delta(ytdC, ytdP, `${range(pi)} ${String(cyr-1).slice(2)}`, money)}</div>`;
+
+  $('debTile').innerHTML = ageTile('Sundry Debtors · Ageing', [{label:'Sundry Debtors', ...d.debtors.total}], 'debtors');
+  $('creTile').innerHTML = ageTile('Sundry Creditors · Ageing', [
+      {label:'Sundry Creditors', ...d.creditors.cr},
+      {label:'Creditors Advance', ...d.creditors.adv}]);
+
+  renderChart(fy, pi, d, u);
+  renderBrands(d, fy, pi, u);
+
+  $('expMeta').textContent = `${range(pi)} ${cyr} · Value in ${u.name}`;
+  const pt = d.purchase.total;
+  $('expTbl').innerHTML =
+    d.purchase.rows.map(r=>`<tr><td>${r.n}</td><td>${money(rowTot(r,d,pi))}</td></tr>`).join('') +
+    `<tr class="total"><td>Total</td><td>${money(rowTot({v:pt.v,t:pt.t},d,pi))}</td></tr>`;
+}
+
+function renderChart(fy, pi, d, u){
+  const rows = MONTHS.slice(0,pi+1).map((m,i)=>({m, pv:d.sales.pv[i]||0, cv:d.sales.cv[i]||0}));
+  const py = `${+fy.slice(0,4)-1}-${+fy.slice(5)-1}`;
+  $('chartMeta').textContent = `FY ${fy} vs FY ${py}, ${range(pi)} · Value in ${u.name}`;
+  $('lgPrev').textContent = `FY ${py.slice(2,4)}-${py.slice(7)}`;
+  $('lgCur').textContent  = `FY ${fy.slice(2,4)}-${fy.slice(7)}`;
+
+  const n=rows.length, rot=n>6, W=600,H=300,L=14,R=14,T=rot?44:30,B=34;
+  const nice = Math.max(1, ...rows.flatMap(r=>[r.cv,r.pv])) * 1.08;
+  const slot = (W-L-R)/n, bw = Math.min(rot?22:30, slot*.38);
+  const y = v => T + (H-T-B) * (1 - v/nice);
+  const lab = v => nfIN(v*u.f, u.f<1 ? 1 : 0);
+  const tag = (x,v,color) => !v ? '' : rot
+    ? `<text transform="translate(${x},${y(v)-5}) rotate(-90)" font-size="10" fill="${color}">${lab(v)}</text>`
+    : `<text x="${x}" y="${y(v)-6}" text-anchor="middle" font-size="10.5" fill="${color}">${lab(v)}</text>`;
+  let s = `<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="Monthly sales comparison">`;
+  s += `<line x1="${L}" x2="${W-R}" y1="${H-B}" y2="${H-B}" stroke="#d5dae1"/>`;
+  rows.forEach((r,i)=>{
+    const cx = L + slot*i + slot/2;
+    s += `<rect x="${cx-bw-1}" y="${y(r.pv)}" width="${bw}" height="${H-B-y(r.pv)}" rx="2" fill="var(--prevbar)"><title>${r.m} prev: ${money(r.pv)} ${u.label}</title></rect>`;
+    s += `<rect x="${cx+1}" y="${y(r.cv)}" width="${bw}" height="${H-B-y(r.cv)}" rx="2" fill="var(--curbar)"><title>${r.m} cur: ${money(r.cv)} ${u.label}</title></rect>`;
+    s += tag(cx-1-bw/2, r.pv, '#5f6b7a') + tag(cx+1+bw/2, r.cv, '#2b3440');
+    s += `<text x="${cx}" y="${H-12}" text-anchor="middle" font-size="12" fill="#5f6b7a">${r.m}</text>`;
+  });
+  $('chart').innerHTML = s + '</svg>';
+}
+
+function renderBrands(d, fy, pi, u){
+  $('brandMeta').textContent = `${range(pi)} ${calYear(fy,pi)} · Qty in numbers · Value in ${u.name}`;
+  const S = d.sales, pre = pi > 0;
+  const rows = d.brands.map(b=>{ const t = brandTot(b,d,pi);
+    return { n:b.n, pq:pre?sumArr(b.q,0,pi-1):null, pv:pre?sumArr(b.v,0,pi-1):null, cq:b.q[pi], cv:b.v[pi], tq:t.q, tv:t.v };
+  }).filter(r=>r.tv!=null);
+  const grand = { n:'Grand Total', pq:pre?sumArr(S.cq,0,pi-1):null, pv:pre?sumArr(S.cv,0,pi-1):null,
+                  cq:S.cq[pi], cv:S.cv[pi], tq:sumArr(S.cq,0,pi), tv:sumArr(S.cv,0,pi) };
+  const preHead = pi===0 ? '–' : (pi===1 ? 'Apr' : `Apr–${MONTHS[pi-1]}`);
+  const cells = r => `<td>${nfIN(r.pq,0)}</td><td>${money(r.pv)}</td><td>${nfIN(r.cq,0)}</td><td>${money(r.cv)}</td><td>${nfIN(r.tq,0)}</td><td>${money(r.tv)}</td>`;
+  $('brandTbl').innerHTML =
+    `<tr><th rowspan="2">Brand</th><th colspan="2" class="grp">${preHead}</th><th colspan="2" class="grp">${MONTHS[pi]}</th><th colspan="2" class="grp">Total</th></tr>` +
+    `<tr>${'<th class="grp">Qty</th><th>Value</th>'.repeat(3)}</tr>` +
+    rows.map(r=>`<tr><td>${r.n}</td>${cells(r)}</tr>`).join('') +
+    `<tr class="total"><td>${grand.n}</td>${cells(grand)}</tr>`;
+}
+
+/* =====================================================================
+   6. BREAKUP MODALS
+   ===================================================================== */
+function openModal(title, sub, html){
+  $('mTitle').textContent = title; $('mSub').textContent = sub; $('mBody').innerHTML = html;
+  $('modal').classList.add('open');
+}
+function closeModal(){ $('modal').classList.remove('open'); }
+
+/* Sales Value / Sales Qty tile -> brand split of the selected month */
+function brandMonth(kind){
+  const {d,fy,pi} = STATE, u = unitInfo(), S = d.sales, isV = kind==='value';
+  const key = isV ? 'v' : 'q', tot = isV ? S.cv[pi] : S.cq[pi];
+  const rows = d.brands.filter(b=>b[key][pi]!=null);
+  const fmt = isV ? money : (x=>nfIN(x,0));
+  openModal(`${isV?'Sales Value':'Sales Qty'} · ${mLabel(fy,pi)} · Brand-wise`,
+            isV ? `Value in ${u.name}` : 'Qty in numbers',
+    `<table><tr><th>Brand</th><th>${isV?'Value':'Qty'}</th><th>Share</th></tr>` +
+    rows.map(b=>`<tr><td>${b.n}</td><td>${fmt(b[key][pi])}</td><td>${(b[key][pi]/tot*100).toFixed(1)}%</td></tr>`).join('') +
+    `<tr class="total"><td>Grand Total</td><td>${fmt(tot)}</td><td>100%</td></tr></table>`);
+}
+
+/* YTD tile -> Month-wise Sales · FY Comparison (months are the column headings) */
+function ytdModal(){
+  const {d,fy,pi} = STATE, u = unitInfo(), S = d.sales;
+  const py = `${+fy.slice(0,4)-1}-${+fy.slice(5)-1}`, a = `FY ${py.slice(2,4)}-${py.slice(7)}`, b = `FY ${fy.slice(2,4)}-${fy.slice(7)}`;
+  const cols = MONTHS.map((m,i)=>({ pq:S.pq[i], cq:i<=pi?S.cq[i]:null, pv:S.pv[i], cv:i<=pi?S.cv[i]:null }));
+  cols.push({ pq:sumArr(S.pq,0,pi), cq:sumArr(S.cq,0,pi), pv:sumArr(S.pv,0,pi), cv:sumArr(S.cv,0,pi) });   // YTD
+  cols.push({ pq:sumArr(S.pq), cq:null, pv:sumArr(S.pv), cv:null });                                      // full prev year
+  const heads = [...MONTHS, `YTD ${range(pi)}`, 'Full year'];
+  const cls = i => i>=12 ? ' class="ytdc"' : '';
+  const row = (label, f) => `<tr><td>${label}</td>${cols.map((c,i)=>`<td${cls(i)}>${f(c)}</td>`).join('')}</tr>`;
+  const grp = t => `<tr class="grprow"><td colspan="${cols.length+1}">${t}</td></tr>`;
+  const h = `<table class="dense"><tr><th></th>${heads.map((t,i)=>`<th${cls(i)}>${t}</th>`).join('')}</tr>` +
+    grp('Qty (numbers)') +
+    row(a, c=>nfIN(c.pq,0)) + row(b, c=>nfIN(c.cq,0)) + row('Change', c=>chg(c.cq,c.pq)) +
+    grp(`Value (${u.name})`) +
+    row(a, c=>money(c.pv)) + row(b, c=>money(c.cv)) + row('Change', c=>chg(c.cv,c.pv)) + '</table>';
+  openModal('Month-wise Sales · FY Comparison', `Qty in numbers · Value in ${u.name}`, h);
+}
+
+/* Brand-wise card -> month matrix with Qty + Value per month */
+function brandMatrix(){
+  const {d,fy,pi} = STATE, u = unitInfo(), S = d.sales, idx = MONTHS.slice(0,pi+1).map((_,i)=>i);
+  const pair = (q,v,bold) => `<td>${q==null?'':nfIN(q,0)}</td><td>${v==null?'':money(v)}</td>`;
+  let h = `<table class="dense"><thead><tr><th rowspan="2">Brand</th>${idx.map(i=>`<th colspan="2" class="grp">${mLabel(fy,i)}</th>`).join('')}<th colspan="2" class="grp">Total</th></tr>
+    <tr>${[...idx,'T'].map(()=>'<th class="grp">Qty</th><th>Value</th>').join('')}</tr></thead><tbody>`;
+  d.brands.forEach(b=>{
+    const t = brandTot(b,d,pi); if(t.v==null) return;
+    h += `<tr><td>${b.n}</td>${idx.map(i=>pair(b.q[i],b.v[i])).join('')}${pair(t.q,t.v)}</tr>`;
+  });
+  h += `<tr class="total"><td>Grand Total</td>${idx.map(i=>pair(S.cq[i],S.cv[i])).join('')}${pair(sumArr(S.cq,0,pi),sumArr(S.cv,0,pi))}</tr>`;
+  if(d.returns) h += `<tr class="memo"><td>CGCEL Return</td>${idx.map(i=>pair(null,d.returns[i])).join('')}${pair(null,sumArr(d.returns,0,pi))}</tr>`;
+  openModal(`Brand-wise Sales`, `${range(pi)} · Qty in numbers · Value in ${u.name}`, h + '</tbody></table>');
+}
+
+/* Purchase & Expenses card -> month-wise */
+function expMonthly(){
+  const {d,fy,pi} = STATE, u = unitInfo(), idx = MONTHS.slice(0,pi+1).map((_,i)=>i), pt = d.purchase.total;
+  let h = `<table class="dense"><tr><th>Particulars</th>${idx.map(i=>`<th>${mLabel(fy,i)}</th>`).join('')}<th>Total</th></tr>` +
+    d.purchase.rows.map(r=>`<tr><td>${r.n}</td>${idx.map(i=>`<td>${money(r.v[i])}</td>`).join('')}<td><b>${money(rowTot(r,d,pi))}</b></td></tr>`).join('') +
+    `<tr class="total"><td>Total</td>${idx.map(i=>`<td>${money(pt.v[i])}</td>`).join('')}<td>${money(rowTot({v:pt.v,t:pt.t},d,pi))}</td></tr></table>`;
+  const n = d.expNote;
+  if(n && n.idx <= pi){
+    const row = d.purchase.rows.find(r=>r.n===n.row);
+    h += `<p class="note">${mLabel(fy,n.idx)} ${n.row} ${money(row.v[n.idx])} includes: ${n.items.map(([k,v])=>`${k} ${money(v)}`).join(' · ')}</p>`;
+  }
+  openModal('Purchase & Expenses', `${range(pi)} · Value in ${u.name}`, h);
+}
+
+/* Sundry Debtors tile -> Debtors Ageing by party */
+function debtorsModal(){
+  const {d} = STATE, u = unitInfo();
+  openModal('Debtors Ageing', `Sundry Debtors · Value in ${u.name}`,
+    `<table class="dense">${ageTable(d.debtors.rows, d.debtors.total, 'Party')}</table>`);
+}
+
+/* =====================================================================
+   7. WIRING
+   ===================================================================== */
+const ACTIONS = { salesValue:()=>brandMonth('value'), salesQty:()=>brandMonth('qty'),
+                  ytd:ytdModal, brandMatrix, expMonthly, debtors:debtorsModal };
+
+function showBanner(msg){ const b=$('banner'); b.textContent=msg; b.style.display = msg?'block':'none'; }
+
+async function refresh(){
+  const co = $('company').value, fy = $('fy').value, pi = +$('period').value;
+  showBanner('');
+  try{
+    const d = await loadData(co, fy);
+    if(!d || d.sales.cv[pi] == null){
+      showBanner(`No data available for ${FULL[pi]} in FY ${fy}${CONFIG.USE_MOCK ? ' (mock data covers FY 2026-2027, Apr–Sep)' : ''}.`);
+      return;
+    }
+    render(d, co, fy, pi);
+  }catch(e){ showBanner('Could not load data: ' + e.message); console.error(e); }
+}
+
+document.addEventListener('click', e=>{
+  const el = e.target.closest('[data-act]');
+  if(!el || !STATE) return;
+  if(el.tagName === 'A') e.preventDefault();
+  (ACTIONS[el.dataset.act] || (()=>{}))();
+});
+document.addEventListener('keydown', e=>{ if(e.key==='Escape') closeModal(); });
+$('modal').onclick = e => { if(e.target === $('modal')) closeModal(); };
+$('mClose').onclick = closeModal;
+
+$('company').innerHTML = COMPANIES.map(c=>`<option value="${c.code}" ${c.code===DEFAULT_COMPANY?'selected':''}>${c.code} - ${c.name}</option>`).join('');
+$('fy').innerHTML = FY_LIST.map(f=>`<option>${f}</option>`).join('');
+$('period').innerHTML = MONTHS.map((m,i)=>`<option value="${i}" ${i===5?'selected':''}>${m} ${i<9?'2026':'2027'}</option>`).join('');
+$('go').onclick = refresh;
+$('unit').onchange = ()=> STATE && render(STATE.d, STATE.co, STATE.fy, STATE.pi);   // unit change needs no refetch
+refresh();
+</script>
+</body>
+</html>
