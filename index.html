@@ -380,8 +380,8 @@ async function loadData(co, fy){
    ===================================================================== */
 const $ = id => document.getElementById(id);
 const unitInfo = () => ({
-  lacs:{f:1,   label:'Lacs', name:'Lacs',    dp:2},
   cr:  {f:.01, label:'Cr',   name:'Crores',  dp:2},
+  lacs:{f:1,   label:'Lacs', name:'Lacs',    dp:2},
   abs: {f:1e5, label:'',     name:'Rupees',  dp:0}
 }[$('unit').value]);
 const nfIN  = (n,dp=2)=> n==null ? '–' : n.toLocaleString('en-IN',{minimumFractionDigits:dp,maximumFractionDigits:dp});
