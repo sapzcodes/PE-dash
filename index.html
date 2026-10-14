@@ -21,6 +21,8 @@
   #company{min-width:210px}
   button{height:32px;padding:0 20px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;border:1px solid var(--primary)}
   .btn-go{background:var(--primary);color:#fff}
+  .btn-export{background:#fff;color:var(--primary);padding:0 14px}
+  .btn-export:hover{background:#eef5ff}
   main{padding:16px 20px;display:grid;gap:16px;max-width:1500px;margin:0 auto}
 
   .kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
@@ -65,12 +67,24 @@
   .note{font-size:12.5px;color:var(--muted);margin:12px 0 0}
   svg text{font-family:inherit}
 
+  /* Scrollable table box (Brand-wise card): header + first column + total row stay pinned */
+  .vscroll{max-height:370px;overflow:auto;border-top:1px solid var(--line)}
+  .vscroll table{border-collapse:separate;border-spacing:0}
+  .vscroll th,.vscroll td{border-bottom:1px solid #f0f2f5}
+  .vscroll thead th{position:sticky;top:0;z-index:3;background:#fff;height:32px;border-bottom:1px solid var(--line)}
+  .vscroll thead tr:nth-child(2) th{top:32px}
+  .vscroll thead th.fc{left:0;z-index:5}
+  .vscroll tbody td:first-child{position:sticky;left:0;z-index:1;background:#fff}
+  .vscroll tfoot td{position:sticky;bottom:0;z-index:2;background:#fff;border-top:2px solid var(--line);border-bottom:none;font-weight:700}
+  .vscroll tfoot td:first-child{left:0;z-index:4}
+
   #modal{display:none;position:fixed;inset:0;background:rgba(15,23,42,.45);z-index:50;justify-content:center;align-items:flex-start;padding:40px 16px;overflow:auto}
   #modal.open{display:flex}
   .sheet{background:#fff;border-radius:14px;max-width:1280px;width:100%;padding:20px 24px 24px;box-shadow:0 20px 50px rgba(0,0,0,.25)}
-  .sheet-head{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px}
+  .sheet-head{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px;gap:16px}
   .sheet-head h2{margin:0;font-size:18px;font-weight:600}
   .sheet-head .meta{margin:3px 0 0;font-size:12.5px;color:var(--muted)}
+  .sheet-actions{display:flex;align-items:center;gap:8px;flex-shrink:0}
   .x{border:0;background:none;font-size:28px;line-height:1;color:var(--muted);height:auto;padding:0 4px}
 </style>
 </head>
@@ -118,12 +132,12 @@
       <div class="card click" data-act="brandMatrix" title="Click for month-wise breakup">
         <h2>Brand-wise Sales · YTD</h2>
         <div class="meta" id="brandMeta"></div>
-        <div class="scroll"><table class="dense" id="brandTbl"></table></div>
+        <div class="vscroll"><table class="dense" id="brandTbl"></table></div>
       </div>
       <div class="card click" data-act="expMonthly" title="Click for month-wise breakup">
         <h2>Purchase &amp; Expenses · YTD</h2>
         <div class="meta" id="expMeta"></div>
-        <table id="expTbl"></table>
+        <div class="scroll"><table class="dense" id="expTbl"></table></div>
       </div>
     </div>
   </section>
@@ -133,12 +147,17 @@
   <div class="sheet">
     <div class="sheet-head">
       <div><h2 id="mTitle"></h2><div class="meta" id="mSub"></div></div>
-      <button class="x" id="mClose" aria-label="Close">×</button>
+      <div class="sheet-actions">
+        <button class="btn-export" id="mExport" title="Download this popup as Excel">⬇ Export to Excel</button>
+        <button class="x" id="mClose" aria-label="Close">×</button>
+      </div>
     </div>
     <div class="scroll" id="mBody"></div>
   </div>
 </div>
 
+<!-- SheetJS for real .xlsx export. If it can't load (offline / blocked), export falls back to an Excel-readable .xls -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script>
 /* =====================================================================
    1. CONFIG – flip USE_MOCK to false once the OData service is ready
@@ -389,6 +408,7 @@ const money = n => n==null ? '–' : '₹\u00a0' + nfIN(n*unitInfo().f, unitInfo
 const calYear = (fy,i) => i<9 ? +fy.slice(0,4) : +fy.slice(5);
 const mLabel  = (fy,i) => `${MONTHS[i]}-${String(calYear(fy,i)).slice(2)}`;
 const range   = i => i===0 ? 'Apr' : `Apr–${MONTHS[i]}`;
+const preHead = pi => pi===0 ? '–' : (pi===1 ? 'Apr' : `Apr–${MONTHS[pi-1]}`);   // "Apr to previous month" heading
 const pct = (c,p)=> (c==null||!p) ? null : ((c-p)/p*100);
 const chg = (c,p)=>{ const x=pct(c,p); return x==null ? '–' : `<span class="${x>=0?'up':'down'}">${x>=0?'▲':'▼'} ${Math.abs(x).toFixed(1)}%</span>`; };
 
@@ -454,12 +474,7 @@ function render(d, co, fy, pi){
 
   renderChart(fy, pi, d, u);
   renderBrands(d, fy, pi, u);
-
-  $('expMeta').textContent = `${range(pi)} ${cyr} · Value in ${u.name}`;
-  const pt = d.purchase.total;
-  $('expTbl').innerHTML =
-    d.purchase.rows.map(r=>`<tr><td>${r.n}</td><td>${money(rowTot(r,d,pi))}</td></tr>`).join('') +
-    `<tr class="total"><td>Total</td><td>${money(rowTot({v:pt.v,t:pt.t},d,pi))}</td></tr>`;
+  renderExpenses(d, fy, pi, u);
 }
 
 function renderChart(fy, pi, d, u){
@@ -489,6 +504,7 @@ function renderChart(fy, pi, d, u){
   $('chart').innerHTML = s + '</svg>';
 }
 
+/* Brand-wise card: scrolls inside .vscroll (header, first column and Grand Total stay pinned) */
 function renderBrands(d, fy, pi, u){
   $('brandMeta').textContent = `${range(pi)} ${calYear(fy,pi)} · Qty in numbers · Value in ${u.name}`;
   const S = d.sales, pre = pi > 0;
@@ -497,13 +513,24 @@ function renderBrands(d, fy, pi, u){
   }).filter(r=>r.tv!=null);
   const grand = { n:'Grand Total', pq:pre?sumArr(S.cq,0,pi-1):null, pv:pre?sumArr(S.cv,0,pi-1):null,
                   cq:S.cq[pi], cv:S.cv[pi], tq:sumArr(S.cq,0,pi), tv:sumArr(S.cv,0,pi) };
-  const preHead = pi===0 ? '–' : (pi===1 ? 'Apr' : `Apr–${MONTHS[pi-1]}`);
   const cells = r => `<td>${nfIN(r.pq,0)}</td><td>${money(r.pv)}</td><td>${nfIN(r.cq,0)}</td><td>${money(r.cv)}</td><td>${nfIN(r.tq,0)}</td><td>${money(r.tv)}</td>`;
   $('brandTbl').innerHTML =
-    `<tr><th rowspan="2">Brand</th><th colspan="2" class="grp">${preHead}</th><th colspan="2" class="grp">${MONTHS[pi]}</th><th colspan="2" class="grp">Total</th></tr>` +
-    `<tr>${'<th class="grp">Qty</th><th>Value</th>'.repeat(3)}</tr>` +
-    rows.map(r=>`<tr><td>${r.n}</td>${cells(r)}</tr>`).join('') +
-    `<tr class="total"><td>${grand.n}</td>${cells(grand)}</tr>`;
+    `<thead><tr><th rowspan="2" class="fc">Brand</th><th colspan="2" class="grp">${preHead(pi)}</th><th colspan="2" class="grp">${MONTHS[pi]}</th><th colspan="2" class="grp">Total</th></tr>` +
+    `<tr>${'<th class="grp">Qty</th><th>Value</th>'.repeat(3)}</tr></thead>` +
+    `<tbody>${rows.map(r=>`<tr><td>${r.n}</td>${cells(r)}</tr>`).join('')}</tbody>` +
+    `<tfoot><tr class="total"><td>${grand.n}</td>${cells(grand)}</tr></tfoot>`;
+}
+
+/* Purchase & Expenses card: Apr→previous month | current month | YTD total */
+function renderExpenses(d, fy, pi, u){
+  $('expMeta').textContent = `${range(pi)} ${calYear(fy,pi)} · Value in ${u.name}`;
+  const pt = d.purchase.total, pre = pi > 0;
+  const preOf = r => pre ? sumArr(r.v,0,pi-1) : null;
+  const line = (n, r, cls) => `<tr${cls?` class="${cls}"`:''}><td>${n}</td><td>${money(preOf(r))}</td><td>${money(r.v[pi])}</td><td>${money(rowTot(r,d,pi))}</td></tr>`;
+  $('expTbl').innerHTML =
+    `<tr><th>Particulars</th><th>${preHead(pi)}</th><th>${MONTHS[pi]}</th><th>Total</th></tr>` +
+    d.purchase.rows.map(r=>line(r.n, r)).join('') +
+    line('Total', {v:pt.v, t:pt.t}, 'total');
 }
 
 /* =====================================================================
@@ -584,6 +611,94 @@ function debtorsModal(){
 }
 
 /* =====================================================================
+   6b. EXPORT POPUP TO EXCEL
+   Generic: reads whatever tables / notes are currently rendered inside
+   #mBody, so any popup you add later (any rows, any columns) exports
+   without extra code. Just build it through openModal().
+   ===================================================================== */
+/* Display text -> typed Excel cell. Numbers stay numbers (₹, commas, ▲▼ % are stripped). */
+function xlCell(td){
+  const t = td.textContent.replace(/\u00a0/g,' ').trim();
+  if(t === '' || t === '–') return '';
+  let m;
+  if((m = t.match(/^([▲▼])\s*([\d.,]+)%$/)))                       // change %  (▲ 5.2% / ▼ 3.1%)
+    return { t:'n', v:(m[1]==='▼'?-1:1) * parseFloat(m[2].replace(/,/g,'')) / 100, z:'0.0%' };
+  if((m = t.match(/^(-?[\d.]+)%$/)))                                // share %
+    return { t:'n', v:parseFloat(m[1]) / 100, z:'0.0%' };
+  if((m = t.match(/^₹?\s*(-?[\d,]+)(?:\.(\d+))?$/))){               // qty / money
+    const dp = (m[2]||'').length;
+    return { t:'n', v:parseFloat(m[1].replace(/,/g,'') + (dp ? '.'+m[2] : '')), z:'#,##0' + (dp ? '.'+'0'.repeat(dp) : '') };
+  }
+  return t;
+}
+
+/* <table> -> array of rows, honouring colspan / rowspan (recorded in merges) */
+function tableToRows(tbl, startRow, merges){
+  const rows = [], occ = {};
+  [...tbl.rows].forEach((tr, r)=>{
+    rows[r] = rows[r] || [];
+    let c = 0;
+    [...tr.cells].forEach(td=>{
+      while(occ[r+','+c]) c++;
+      const cs = td.colSpan || 1, rs = td.rowSpan || 1;
+      rows[r][c] = xlCell(td);
+      if(cs > 1 || rs > 1){
+        merges.push({ s:{r:startRow+r, c}, e:{r:startRow+r+rs-1, c:c+cs-1} });
+        for(let i=0;i<rs;i++) for(let j=0;j<cs;j++) if(i||j) occ[(r+i)+','+(c+j)] = 1;
+      }
+      c += cs;
+    });
+  });
+  return rows.map(r => Array.from(r, x => x===undefined ? '' : x));
+}
+
+function exportPopup(){
+  const title = $('mTitle').textContent, sub = $('mSub').textContent;
+  const aoa = [[title], [sub]], merges = [];
+  if(STATE){
+    const {d,co,fy,pi} = STATE;
+    aoa.push([`Company: ${co} - ${d.name}  |  FY ${fy}  |  Period: ${FULL[pi]} ${calYear(fy,pi)}`]);
+  }
+  aoa.push([]);
+
+  [...$('mBody').querySelectorAll('table, p.note')].forEach(el=>{
+    if(el.tagName === 'TABLE'){
+      const rows = tableToRows(el, aoa.length, merges);
+      rows.forEach(r=>aoa.push(r));
+      aoa.push([]);
+    } else {
+      aoa.push([el.textContent.trim()]);
+    }
+  });
+
+  const stamp = new Date().toISOString().slice(0,10).replace(/-/g,'');
+  const base  = title.replace(/[^\w]+/g,'_').replace(/^_|_$/g,'') + (STATE ? `_${STATE.co}` : '') + `_${stamp}`;
+
+  if(window.XLSX){
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+    ws['!merges'] = merges;
+    const nCols = Math.max(...aoa.map(r=>r.length));
+    ws['!cols'] = Array.from({length:nCols}, (_,c)=>{
+      let w = 8;
+      aoa.slice(4).forEach(r=>{ const x = r[c]; const s = x && typeof x==='object' ? String(x.v) : String(x ?? ''); w = Math.max(w, Math.min(s.length+2, 40)); });
+      return { wch:w };
+    });
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Data');
+    XLSX.writeFile(wb, base + '.xlsx');
+  } else {
+    /* Fallback when SheetJS is unavailable: Excel opens an HTML table saved as .xls */
+    const head = `<h3>${title}</h3><p>${sub}</p>`;
+    const html = `<html><head><meta charset="utf-8"></head><body>${head}${$('mBody').innerHTML}</body></html>`;
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob(['\ufeff', html], {type:'application/vnd.ms-excel'}));
+    a.download = base + '.xls';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=>URL.revokeObjectURL(a.href), 2000);
+  }
+}
+
+/* =====================================================================
    7. WIRING
    ===================================================================== */
 const ACTIONS = { salesValue:()=>brandMonth('value'), salesQty:()=>brandMonth('qty'),
@@ -613,6 +728,7 @@ document.addEventListener('click', e=>{
 document.addEventListener('keydown', e=>{ if(e.key==='Escape') closeModal(); });
 $('modal').onclick = e => { if(e.target === $('modal')) closeModal(); };
 $('mClose').onclick = closeModal;
+$('mExport').onclick = exportPopup;
 
 $('company').innerHTML = COMPANIES.map(c=>`<option value="${c.code}" ${c.code===DEFAULT_COMPANY?'selected':''}>${c.code} - ${c.name}</option>`).join('');
 $('fy').innerHTML = FY_LIST.map(f=>`<option>${f}</option>`).join('');
